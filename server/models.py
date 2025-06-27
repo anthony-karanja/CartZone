@@ -2,6 +2,7 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import MetaData
 from sqlalchemy_serializer import SerializerMixin 
 from sqlalchemy.orm import validates
+from datetime import datetime
 
 metadata = MetaData()
 
@@ -12,10 +13,10 @@ class Users(db.Model, SerializerMixin):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String)
     email = db.Column(db.String, unique=True)
-    password_hash = db.Column(db.Integer)
+    password_hash = db.Column(db.String)
     role = db.Column(db.String)
     
-    orders = db.relationship('Orders', back_populates='user', cascade="all, delete-orphan")
+    orders = db.relationship('Orders', back_populates='users', cascade="all, delete-orphan")
     cart_items = db.relationship('Cart_item', back_populates='users', cascade="all, delete-orphan")
     
     def to_dict(self):
@@ -54,13 +55,22 @@ class Products(db.Model, SerializerMixin):
 class Orders(db.Model, SerializerMixin):
     __tablename__ = 'orders'
     id = db.Column(db.Integer, primary_key=True)
-    order_date = db.Column(db.String, nullable=False)
+    order_date = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     status = db.Column(db.String)
     total_amount = db.Column(db.Float)
-    user_id = db.Column(db.String, db.ForeignKey('users.id'))
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     
     user = db.relationship('Users', back_populates='orders')
     order_items = db.relationship('Order_item', back_populates='orders', cascade="all, delete-orphan")
+    
+    def to_dict(self):
+        return{
+           'id':self.id,
+            'order_date':self.order_date,
+            'status':self.status,
+            'total_amount':self.total_amount,
+            'user_id':self.user_id,
+        }
     
 class Cart_item(db.Model, SerializerMixin):
     __tablename__ = 'cart_item'
@@ -71,6 +81,14 @@ class Cart_item(db.Model, SerializerMixin):
     
     users = db.relationship('Users', back_populates='cart_items')
     product = db.relationship('Products', back_populates='cart_items')
+    
+    def to_dict(self):
+        return{
+           'id':self.id,
+            'quantity':self.quantity,
+            'user_id':self.user_id,
+            'product_id':self.product_id
+        }
 
 class Order_item(db.Model, SerializerMixin):
     __tablename__ = 'order_item'
@@ -82,6 +100,15 @@ class Order_item(db.Model, SerializerMixin):
     
     orders = db.relationship('Orders', back_populates='order_items')
     products = db.relationship('Products', back_populates='order_items')
+    
+    def to_dict(self):
+        return{
+           'id':self.id,
+            'quantity':self.quantity,
+            'price_at_purchase':self.price_at_purchase,
+            'product_id':self.product_id,
+            'order_id':self.order_id,
+        }
    
     
     

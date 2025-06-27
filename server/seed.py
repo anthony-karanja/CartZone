@@ -5,7 +5,6 @@ from models import db, Users, Products, Cart_item, Orders, Order_item
 from datetime import datetime
 
 with app.app_context():
-    print("🔄 Resetting database...")
 
     # Optional: Clear all data
     db.session.query(Order_item).delete()
@@ -16,7 +15,7 @@ with app.app_context():
 
     db.session.commit()
 
-    print("✅ Seeding users...")
+    print(" Seeding users...")
 
     user1 = Users(name="Alice", email="alice@example.com", password_hash=12345, role="customer")
     user2 = Users(name="Bob", email="bob@example.com", password_hash=67890, role="admin")
@@ -24,7 +23,7 @@ with app.app_context():
     db.session.add_all([user1, user2])
     db.session.commit()
 
-    print("✅ Seeding products...")
+    print(" Seeding products...")
 
     p1 = Products(
         name="Laptop", description="Powerful laptop", price=1500.00,
@@ -38,7 +37,7 @@ with app.app_context():
     db.session.add_all([p1, p2])
     db.session.commit()
 
-    print("🛒 Seeding cart items...")
+    print(" Seeding cart items...")
 
     cart1 = Cart_item(user_id=user1.id, product_id=p1.id, quantity=1)
     cart2 = Cart_item(user_id=user1.id, product_id=p2.id, quantity=2)
@@ -46,7 +45,7 @@ with app.app_context():
     db.session.add_all([cart1, cart2])
     db.session.commit()
 
-    print("📦 Seeding order...")
+    print(" Seeding order...")
 
     order = Orders(
         user_id=user1.id,
@@ -76,4 +75,4 @@ with app.app_context():
     db.session.add_all([item1, item2])
     db.session.commit()
 
-    print("✅ Seed complete.")
+    print(" Seed complete.")
