@@ -2,7 +2,8 @@
 
 from app import app
 from models import db, Users, Products, Cart_item, Orders, Order_item
-from datetime import datetime
+from datetime import datetime, timezone
+from werkzeug.security import generate_password_hash
 
 with app.app_context():
 
@@ -17,8 +18,8 @@ with app.app_context():
 
     print(" Seeding users...")
 
-    user1 = Users(name="Alice", email="alice@example.com", password_hash=12345, role="customer")
-    user2 = Users(name="Bob", email="bob@example.com", password_hash=67890, role="admin")
+    user1 = Users(name="Alice", email="alice@example.com", password_hash=generate_password_hash("password123") , role="user")
+    user2 = Users(name="Bob", email="bob@example.com", password_hash="67890", role="admin")
 
     db.session.add_all([user1, user2])
     db.session.commit()
@@ -49,7 +50,7 @@ with app.app_context():
 
     order = Orders(
         user_id=user1.id,
-        order_date=datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
+        order_date = datetime.now(timezone.utc),
         status="Pending",
         total_amount=0  # will update after items
     )

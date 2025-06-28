@@ -14,10 +14,12 @@ class Users(db.Model, SerializerMixin):
     name = db.Column(db.String)
     email = db.Column(db.String, unique=True)
     password_hash = db.Column(db.String)
-    role = db.Column(db.String)
+    role = db.Column(db.String, default='user')
     
-    orders = db.relationship('Orders', back_populates='users', cascade="all, delete-orphan")
+    orders = db.relationship('Orders', back_populates='user', cascade="all, delete-orphan")
     cart_items = db.relationship('Cart_item', back_populates='users', cascade="all, delete-orphan")
+    
+    serialize_rules = ('-password_hash',)
     
     def to_dict(self):
         return{
@@ -26,8 +28,19 @@ class Users(db.Model, SerializerMixin):
             'email':self.email,
             'password_hash':self.password_hash,
             'role':self.role
-            
         }
+        
+    @validates('email')
+    def validate_email(self, key, email):
+        if '@' not in email:
+            raise ValueError("Invalid email format")
+        return email
+
+    @validates('role')
+    def validate_role(self, key, role):
+        if role not in ['admin', 'user']:
+            raise ValueError("Role must be either 'admin' or 'user'")
+        return role
     
 class Products(db.Model, SerializerMixin):
     __tablename__ = 'products'
@@ -39,7 +52,7 @@ class Products(db.Model, SerializerMixin):
     image_url = db.Column(db.String)
     
     cart_items = db.relationship('Cart_item', back_populates='product', cascade="all, delete-orphan")
-    order_items = db.relationship('Order_item', back_populates='products', cascade="all, delete-orphan")
+    order_items = db.relationship('Order_item', back_populates='product', cascade="all, delete-orphan")
     
     def to_dict(self):
         return{
@@ -51,6 +64,17 @@ class Products(db.Model, SerializerMixin):
             'image_url':self.image_url,
         }
     
+    @validates('price')
+    def validate_price(self, key, price):
+        if price < 0:
+            raise ValueError("Price cannot be negative")
+        return price
+
+    @validates('stock_quantity')
+    def validate_stock(self, key, qty):
+        if qty < 0:
+            raise ValueError("Stock quantity cannot be negative")
+        return qty
     
 class Orders(db.Model, SerializerMixin):
     __tablename__ = 'orders'
@@ -61,7 +85,7 @@ class Orders(db.Model, SerializerMixin):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     
     user = db.relationship('Users', back_populates='orders')
-    order_items = db.relationship('Order_item', back_populates='orders', cascade="all, delete-orphan")
+    order_items = db.relationship('Order_item', back_populates='order', cascade="all, delete-orphan")
     
     def to_dict(self):
         return{
@@ -89,6 +113,12 @@ class Cart_item(db.Model, SerializerMixin):
             'user_id':self.user_id,
             'product_id':self.product_id
         }
+        
+    @validates('quantity')
+    def validate_quantity(self, key, qty):
+        if qty <= 0:
+            raise ValueError("Quantity must be greater than 0")
+        return qty
 
 class Order_item(db.Model, SerializerMixin):
     __tablename__ = 'order_item'
@@ -98,8 +128,8 @@ class Order_item(db.Model, SerializerMixin):
     product_id = db.Column(db.Integer, db.ForeignKey('products.id'))
     order_id = db.Column(db.Integer, db.ForeignKey('orders.id'))
     
-    orders = db.relationship('Orders', back_populates='order_items')
-    products = db.relationship('Products', back_populates='order_items')
+    order = db.relationship('Orders', back_populates='order_items')
+    product = db.relationship('Products', back_populates='order_items')
     
     def to_dict(self):
         return{
@@ -109,6 +139,17 @@ class Order_item(db.Model, SerializerMixin):
             'product_id':self.product_id,
             'order_id':self.order_id,
         }
-   
+        
+    @validates('quantity')
+    def validate_quantity(self, key, value):
+        if value <= 0:
+            raise ValueError("Quantity must be greater than 0")
+        return value
+
+    @validates('price_at_purchase')
+    def validate_price(self, key, value):
+        if value < 0:
+            raise ValueError("Price at purchase must be non-negative")
+        return value
     
     

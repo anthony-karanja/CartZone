@@ -4,11 +4,15 @@ from models import db, Users, Products, Orders, Cart_item, Order_item
 from flask_restful import Api, Resource
 from flask_cors import CORS
 from flask_restful import Api, Resource
+from werkzeug.security import check_password_hash, generate_password_hash 
 from flask_jwt_extended import (
     JWTManager, create_access_token, jwt_required,
-    get_jwt_identity, verify_jwt_in_request, set_access_cookies, unset_jwt_cookies
+    get_jwt_identity
 )
+
 app = Flask(__name__)
+app.config['JWT_SECRET_KEY'] = 'super-secret-key' 
+jwt = JWTManager(app)
 
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///cartzone.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATION"] = False
@@ -18,6 +22,29 @@ migrate = Migrate(app,db)
 db.init_app(app)
 
 api = Api(app)
+
+# Update CORS configuration
+CORS(app, origins=["http://localhost:5173", "http://127.0.0.1:5173"], supports_credentials=True)
+
+class Login(Resource):
+    def post(self):
+        data = request.get_json()
+        email = data.get('email')
+        password = data.get('password')
+
+        user = Users.query.filter_by(email=email).first()
+        if user and check_password_hash(user.password_hash, password):
+            access_token = create_access_token(identity=user.id)
+            return jsonify({
+                "access_token": access_token,
+                "user": {
+                    "id": user.id,
+                    "name": user.name,
+                    "email": user.email
+                }
+            })
+        else:
+            return {"error": "Invalid credentials"}, 401
 
 class Home(Resource):
     def get(self):
@@ -30,26 +57,30 @@ class User(Resource):
         return make_response(jsonify(users_list), 200)
     
     def post(self):
-        try:
-            data = request.get_json()
-            name = data['name']
-            email = data['email']
-            password_hash = data['password_hash']
-            role = data['role']
-            
-            new_user = Users(
-                name=name, email=email, password_hash=password_hash, role=role
-            )
-            db.session.add(new_user)
-            db.session.commit()
+        data = request.get_json()
 
-            return make_response({
-                'message': 'User created successfully',
-                'data': new_user.to_dict()
-            }, 201)
-        except Exception as e:
-            return make_response("Invalid credentials")
         
+        required_fields = ['name', 'email', 'password_hash', 'role']
+        for field in required_fields:
+            if not data.get(field):
+                return make_response({'error': f'{field} is required'}, 400)
+
+        if Users.query.filter_by(email=data['email']).first():
+            return make_response({'error': 'Email already exists'}, 409)
+
+        hashed_password = generate_password_hash(data['password_hash'])
+
+        new_user = Users(
+            name=data['name'],
+            email=data['email'],
+            password_hash=hashed_password,
+            role=data['role']
+        )
+        db.session.add(new_user)
+        db.session.commit()
+
+        return make_response({'message': 'User created', 'data': new_user.to_dict()}, 201)
+
 class UserById(Resource):  
     def get(self, id):
         try:
@@ -64,7 +95,7 @@ class UserById(Resource):
             user = Users.query.get(id)
             user.name = data['name']
             user.email = data['email']
-            user.password_hash = data['password_hash']
+            user.password_hash = generate_password_hash(data['password_hash'])
             user.role = data['role']
             db.session.commit()
             return make_response(f'{user.name} updated succesfully')
@@ -85,67 +116,89 @@ class Product(Resource):
             products = Products.query.all()
             product_list = [product.to_dict() for product in products]  # convert each user to dict
             return make_response(jsonify(product_list), 200)
-    
+    @jwt_required()
     def post(self):
-        
-            data = request.get_json()
-            name = data['name']
-            description = data['description']
-            price = data['price']
-            stock_quantity = data['stock_quantity']
-            image_url = data['image_url']
+        current_user = get_jwt_identity()
+        if current_user['role'] != 'admin':
+            return make_response({'error': 'Admin access only'}, 403)
+
+        data = request.get_json()
+        name = data['name']
+        description = data['description']
+        price = data['price']
+        stock_quantity = data['stock_quantity']
+        image_url = data['image_url']
             
-            new_product = Products(
+        new_product = Products(
                 name=name, description=description, price=price, stock_quantity=stock_quantity, image_url=image_url
             )
-            db.session.add(new_product)
-            db.session.commit()
+        db.session.add(new_product)
+        db.session.commit()
 
-            return make_response({
+        return make_response({
                 'message': 'Product created successfully',
                 'data': new_product.to_dict()
             }, 201)
         
         
 class ProductById(Resource):  
+    @jwt_required()
     def get(self, id):
-        product = Products.query.filter_by(id=id).first()
+        product = Products.query.get(id)
+        if not product:
+            return make_response({'error': 'Product not found'}, 404)
         return make_response(product.to_dict(), 200)
-      
+
+    @jwt_required()
     def patch(self, id):
+        current_user = get_jwt_identity()
+        if current_user['role'] != 'admin':
+            return make_response({'error': 'Admin access only'}, 403)
+
+        data = request.get_json()
+        product = Products.query.get(id)
+        if not product:
+            return make_response({'error': 'Product not found'}, 404)
+
         try:
-            data = request.get_json()
-            product = Product.query.get(id)
-            product.name = data['name']
-            product.description = data['description']
-            product.price = data['price']
-            product.stock_quantity = data['stock_quantity']
-            product.image_url = data['image_url']
+            product.name = data.get('name', product.name)
+            product.description = data.get('description', product.description)
+            product.price = data.get('price', product.price)
+            product.stock_quantity = data.get('stock_quantity', product.stock_quantity)
+            product.image_url = data.get('image_url', product.image_url)
             db.session.commit()
-            return make_response(f'{product.name} updated succesfully')
-        except Exception as e:
-            return make_response("Invalid inputs")
-    
+            return make_response(f'{product.name} updated successfully', 200)
+        except Exception:
+            return make_response({'error': 'Invalid inputs'}, 400)
+
+    @jwt_required()
     def delete(self, id):
-        try:
-            product = Products.query.filter_by(id=id).first()
-            db.session.delete(product)
-            db.session.commit()
-            return make_response(f'{product.name} deleted succesfully')
-        except Exception as e:
-            return make_response(f'id{product.id} not found')
-   
+        current_user = get_jwt_identity()
+        if current_user['role'] != 'admin':
+            return make_response({'error': 'Admin access only'}, 403)
+
+        product = Products.query.get(id)
+        if not product:
+            return make_response({'error': 'Product not found'}, 404)
+
+        db.session.delete(product)
+        db.session.commit()
+        return make_response(f'{product.name} deleted successfully', 200)
+    
 class Order(Resource):
+    @jwt_required()
     def get(self):
         orders = Orders.query.all()
         return make_response(jsonify([order.to_dict() for order in orders]), 200)
 
+    @jwt_required()
     def post(self):
         try:
+            current_user = get_jwt_identity() 
             data = request.get_json()
-
+              
             new_order = Orders(
-                user_id=data['user_id'],
+                user_id=current_user['id'],
                 status=data.get('status', 'processing'),
                 total_amount=data['total_amount']
             )
@@ -197,33 +250,30 @@ class OrderById(Resource):
             return make_response(f'id{order.id} not found')
 
 class Cart(Resource):
+    @jwt_required()
     def get(self):
-        cart_items = Cart_item.query.all()
+        current_user = get_jwt_identity()
+        cart_items = Cart_item.query.filter_by(user_id=current_user['id']).all()
         return make_response(jsonify([item.to_dict() for item in cart_items]), 200)
 
+    @jwt_required()
     def post(self):
-        try:
-            data = request.get_json()
+        current_user = get_jwt_identity()
+        data = request.get_json()
 
-            new_cart_item = Cart_item(
-                if
-                    user_id=data['user_id'],
-                    product_id=data['product_id'],
-                    quantity=data['quantity'] 
-                return
-            )
+        new_cart_item = Cart_item(
+            user_id=current_user['id'],  # override any spoofed user_id
+            product_id=data['product_id'],
+            quantity=data['quantity']
+        )
 
-            db.session.add(new_cart_item)
-            db.session.commit()
+        db.session.add(new_cart_item)
+        db.session.commit()
 
-            return make_response({
-                'message': 'Item added to cart',
-                'data': new_cart_item.to_dict()
-            }, 201)
-        except Exception as e:
-            return make_response("Cart not found")
+        return make_response({'message': 'Item added to cart', 'data': new_cart_item.to_dict()}, 201)
 
 class CartById(Resource):
+    @jwt_required()
     def patch(self, id):
         cart_item = Cart_item.query.get_or_404(id)
         data = request.get_json()
@@ -232,9 +282,14 @@ class CartById(Resource):
 
         db.session.commit()
         return make_response(f"Cart item updated successfully", 200)
-
+    
+    @jwt_required()
     def delete(self, id):
-        cart_item = Cart_item.query.get_or_404(id)
+        current_user = get_jwt_identity()
+        cart_item = Cart_item.query.filter_by(id=id, user_id=current_user['id']).first()
+        if not cart_item:
+            return make_response({"error": "Cart item not found"}, 404)
+
         db.session.delete(cart_item)
         db.session.commit()
         return make_response(f"Item removed from cart", 200)
@@ -283,6 +338,7 @@ class OrderItemById(Resource):
        
 
 # Routes
+api.add_resource(Login, '/login')
 api.add_resource(Home, '/')
 api.add_resource(User, '/users')
 api.add_resource(UserById, '/users/<int:id>')
