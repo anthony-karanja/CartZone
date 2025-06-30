@@ -1,8 +1,8 @@
-"""created tables
+"""recreated database
 
-Revision ID: 4244641261b1
+Revision ID: 6c4f5b31218f
 Revises: 
-Create Date: 2025-06-24 14:47:38.404462
+Create Date: 2025-06-29 02:58:27.166259
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '4244641261b1'
+revision = '6c4f5b31218f'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -31,11 +31,10 @@ def upgrade():
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(), nullable=True),
     sa.Column('email', sa.String(), nullable=True),
-    sa.Column('password_hash', sa.Integer(), nullable=True),
+    sa.Column('_password_hash', sa.String(), nullable=False),
     sa.Column('role', sa.String(), nullable=True),
     sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('email'),
-    sa.UniqueConstraint('password_hash')
+    sa.UniqueConstraint('email')
     )
     op.create_table('cart_item',
     sa.Column('id', sa.Integer(), nullable=False),
@@ -48,10 +47,10 @@ def upgrade():
     )
     op.create_table('orders',
     sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('order_date', sa.String(), nullable=False),
+    sa.Column('order_date', sa.DateTime(), nullable=False),
     sa.Column('status', sa.String(), nullable=True),
     sa.Column('total_amount', sa.Float(), nullable=True),
-    sa.Column('user_id', sa.String(), nullable=True),
+    sa.Column('user_id', sa.Integer(), nullable=True),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
