@@ -1,12 +1,28 @@
-import React, { useState, useEffect } from "react";
+// src/Components/Cart.jsx
+import React, { useState, useEffect, useContext } from "react";
+import { AuthContext } from "./Auth";
 
 function Cart() {
   const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // Fetch cart items on mount
-  useEffect(() => {
-    const token = localStorage.getItem("access_token");
+  const { token, user } = useContext(AuthContext);
   
+
+  useEffect(() => {
+    if (!token) {
+      setItems([]);
+      setLoading(false);
+      setError("Please log in to view your cart.");
+      console.log("Cart/Orders: No token available.")
+      return;
+    }
+    console.log("Cart/Orders: Token present. Fetching data.")
+
+    setLoading(true);
+    setError('');
+
     fetch("http://localhost:5555/cart", {
       method: "GET",
       headers: {
@@ -16,7 +32,15 @@ function Cart() {
     })
       .then((res) => {
         if (!res.ok) {
-          throw new Error("Unauthorized");
+          if (res.status === 401) {
+            throw new Error("Authentication required. Please log in.");
+          } else if (res.status === 403) {
+            throw new Error("Access denied to cart.");
+          } else {
+            return res.json().then(errData => { // Try to get more specific error from backend
+                throw new Error(errData.message || `Failed to fetch cart: ${res.statusText}`);
+            });
+          }
         }
         return res.json();
       })
@@ -24,18 +48,28 @@ function Cart() {
         if (Array.isArray(data)) {
           setItems(data);
         } else {
-          setItems([]); // fallback
+          setItems([]);
           console.warn("Cart data is not an array:", data);
+          setError("Failed to load cart items correctly.");
         }
       })
       .catch((error) => {
         console.error("Error fetching cart:", error);
-        setItems([]); // prevent crash
+        setError(error.message);
+        setItems([]);
+      })
+      .finally(() => {
+        setLoading(false);
       });
-  }, []);
+  }, [token]); 
 
   const handleUpdateQuantity = (itemId, newQuantity) => {
-    const token = localStorage.getItem("access_token");
+    if (!token) {
+      setError("Please log in to update your cart.");
+      return;
+    }
+    setError('');
+
     fetch(`http://localhost:5555/cart/${itemId}`, {
       method: "PUT",
       headers: {
@@ -44,32 +78,64 @@ function Cart() {
       },
       body: JSON.stringify({ quantity: newQuantity }),
     })
-      .then((res) => res.json())
+      .then((res) => {
+          if (!res.ok) {
+            return res.json().then(errData => {
+                throw new Error(errData.message || "Failed to update quantity");
+            });
+          }
+          return res.json();
+      })
       .then((updatedItem) => {
         setItems((prevItems) =>
           prevItems.map((item) =>
             item.id === updatedItem.id ? updatedItem : item
           )
         );
+      })
+      .catch(error => {
+        console.error("Error updating cart item:", error);
+        setError(error.message);
       });
   };
 
   const handleRemoveFromCart = (itemId) => {
-    const token = localStorage.getItem("access_token");
+    if (!token) {
+      setError("Please log in to remove items from your cart.");
+      return;
+    }
+    setError('');
+
     fetch(`http://localhost:5555/cart/${itemId}`, {
       method: "DELETE",
-      headers: { 
+      headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-    }).then(() => {
+    })
+    .then((res) => {
+      if (!res.ok) {
+        return res.json().then(errData => {
+            throw new Error(errData.message || "Failed to remove item from cart");
+        });
+      }
+      return res.json();
+    })
+    .then(() => {
       setItems((prevItems) => prevItems.filter((item) => item.id !== itemId));
+    })
+    .catch(error => {
+      console.error("Error removing cart item:", error);
+      setError(error.message);
     });
   };
 
   const total = Array.isArray(items)
-  ? items.reduce((sum, item) => sum + item.price * item.quantity, 0)
-  : 0;
+    ? items.reduce((sum, item) => sum + (item.product?.price || 0) * (item.quantity || 0), 0)
+    : 0;
+
+  if (loading) return <p>Loading cart...</p>;
+  if (error) return <p className="error-message">{error}</p>;
 
   return (
     <div id="cart" className="cart">
@@ -80,10 +146,10 @@ function Cart() {
         <div>
           {items.map((item) => (
             <div key={item.id} className="cart-item">
-              <img src={item.image} alt={item.name} className="cart-img" />
+              <img src={item.product?.image_url} alt={item.product?.name} className="cart-img" />
               <div className="cart-details">
-                <h3>{item.name}</h3>
-                <p>KES {item.price.toLocaleString()}</p>
+                <h3>{item.product?.name}</h3>
+                <p>KES {(item.product?.price || 0).toLocaleString()}</p>
                 <input
                   type="number"
                   min="1"

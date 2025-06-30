@@ -1,38 +1,48 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
+import { Link } from "react-router-dom";
 
-function Signup({ onSignup, switchToLogin }) {
+function Signup({ onSignup }) {
+
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [message, setMessage] = useState('');
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-  
+    setMessage('');
+
     if (!name || !email || !password) {
-      alert('Please fill in all fields.');
+      setMessage('Please fill in all fields.');
       return;
     }
-  
-    try {
-      const response = await fetch('http://localhost:5555/users', {
+
+    fetch('http://localhost:5555/users', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name, email, password_hash: password, role: 'user' }), // ✅ Add role
+        body: JSON.stringify({ name, email, password: password, role: 'user' }),
+      })
+      .then(response => {
+          if (!response.ok) {
+            return response.json().then(errorData => {
+                throw new Error(errorData.error || 'Signup failed');
+            });
+          }
+          return response.json();
+      })
+      .then(data => {
+        setMessage('Signup successful! You can now log in.');
+        onSignup?.(data.data);
+        setName('');
+        setEmail('');
+        setPassword('');
+      })
+      .catch((err) => {
+        setMessage(err.message);
+        console.error("Signup error:", err);
       });
-  
-      const data = await response.json();
-  
-      if (!response.ok) {
-        throw new Error(data.error || 'Signup failed');
-      }
-  
-      alert('Signup successful!');
-      onSignup?.(data.data); // use `data.data` since your Flask returns user inside "data" key
-    } catch (err) {
-      alert(err.message);
-    }
   };
 
   return (
@@ -59,8 +69,9 @@ function Signup({ onSignup, switchToLogin }) {
         />
         <button type="submit">Sign Up</button>
       </form>
+      {message && <p className="auth-message">{message}</p>}
       <p className="switch-auth">
-        Already have an account? <span onClick={switchToLogin}>Log in</span>
+        Already have an account?  <Link to={'/login'}>Log in</Link> 
       </p>
     </div>
   );

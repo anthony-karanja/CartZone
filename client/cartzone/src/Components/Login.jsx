@@ -1,83 +1,78 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { AuthContext } from './Auth';
 
-function Login({ onLogin, switchToSignup }) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [message, setMessage] = useState('');
-  const [loading, setLoading] = useState(false);
+function Login() {
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+    const navigate = useNavigate();
+    const { login } = useContext(AuthContext); 
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    setMessage('');
-    
-    if (!email || !password) {
-      setMessage('Please enter both email and password.');
-      return;
-    }
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        setError('');
 
-    setLoading(true);
+        fetch('http://localhost:5555/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email, password }),
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(errorData => {
+                    throw new Error(errorData.message || 'Login failed. Please try again.');
+                });
+            }
+            return response.json(); 
+        })
+        .then(data => {
+            console.log("Backend response data:", data);
 
-    fetch("http://localhost:5555/login", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ email, password })
-    })
-    .then((res) => {
-      if (!res.ok) {
-        throw new Error("Login failed. Check your credentials.");
-      }
-      return res.json(); // ✅ Parse JSON response
-    })
-      .then((data) => {
-        if (data.access_token) {
-          localStorage.setItem("access_token", data.access_token); // ✅ Save token
-          setMessage("Login successful!");
-          onLogin?.(data.user); // if user data is included
-        } else {
-          throw new Error("Login did not return access_token");
-        }
-      })
-      .catch((err) => {
-        setMessage(err.message);
-      })
-      .finally(() => setLoading(false));
-  };
+            if (data.user && data.user.id && data.access_token) {
+                console.log("User ID from backend:", data.user.id);
+                login(data.user, data.access_token);
 
-  
+                navigate('/');
+            } else {
+                setError('Login successful, but user data or token is missing from response.');
+                console.error('Missing user data/token in login response:', data);
+            }
+        })
+        .catch(err => {
+            console.error('Network or unexpected error:', err);
+            setError(err.message || 'An unexpected error occurred. Please try again later.');
+        });
+    };
 
-  return (
-    <div className="auth-container">
-      <h2 className="auth-title">Login</h2>
-      <form className="auth-form" onSubmit={handleSubmit}>
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-        <button type="submit" disabled={loading}>
-          {loading ? 'Logging in...' : 'Log In'}
-        </button>
-      </form>
-
-      {message && <p className="auth-error">{message}</p>}
-
-      <p className="switch-auth">
-        Don’t have an account?{' '}
-        <span onClick={switchToSignup} style={{ cursor: 'pointer', color: '#007bff' }}>
-          Sign up
-        </span>
-      </p>
-    </div>
-  );
+    return (
+        <div className="login-container">
+            <form onSubmit={handleSubmit}>
+                <h2>Login</h2>
+                <input
+                    type="email"
+                    placeholder="Email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                />
+                <input
+                    type="password"
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                />
+                <button type="submit">Log In</button>
+                {error && <p className="error-message">{error}</p>}
+                <p>
+                    Don't have an account? <a href="/signup">Sign up</a>
+                </p>
+            </form>
+        </div>
+    );
 }
 
 export default Login;

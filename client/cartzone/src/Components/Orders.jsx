@@ -1,36 +1,55 @@
-import React, { useEffect, useState } from "react";
+// src/Components/Orders.jsx
+import React, { useState, useEffect, useContext } from "react";
+import { AuthContext } from "./Auth";
 
 function Orders() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
 
+  const { token } = useContext(AuthContext);
+
   useEffect(() => {
-    const token = localStorage.getItem("access_token");
-    
+    if (!token) {
+      setMessage("Please log in to view your orders.");
+      setLoading(false);
+      console.log("Cart/Orders: No token available."); 
+      return;
+    }
+    console.log("Cart/Orders: Token present. Fetching data.")
+
+    setMessage("");
+    setLoading(true);
+
     fetch("http://localhost:5555/orders", {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`, // ✅ MUST be here
+          Authorization: `Bearer ${token}`,
         },
       })
       .then((res) => {
         if (!res.ok) {
-          throw new Error("Failed to fetch orders");
+          if (res.status === 401) {
+            throw new Error("Authentication required. Please log in.");
+          } else {
+            return res.json().then(errData => {
+                throw new Error(errData.message || `Failed to fetch orders: ${res.statusText}`);
+            });
+          }
         }
-        return res.json(); // ✅ you missed this
+        return res.json();
       })
       .then((data) => {
         setOrders(data);
         setMessage("");
       })
       .catch((err) => {
-        setMessage("Could not load your orders. Please try again.");
+        setMessage(err.message || "Could not load your orders. Please try again.");
         console.error(err);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [token]);
 
   return (
     <div className="orders">
@@ -50,20 +69,24 @@ function Orders() {
                 <strong>Order ID:</strong> {order.id}
               </div>
               <div>
-                <strong>Date:</strong> {order.date}
+                <strong>Date:</strong> {new Date(order.order_date).toLocaleDateString()}
               </div>
               <div>
                 <strong>Status:</strong> {order.status}
               </div>
               <div>
-                <strong>Total:</strong> KES {order.total.toLocaleString()}
+                <strong>Total:</strong> KES {order.total_amount.toLocaleString()}
               </div>
               <div className="ordered-items">
-                {order.items.map((item, index) => (
-                  <div key={index}>
-                    {item.name} x{item.quantity}
-                  </div>
-                ))}
+                {order.order_items && order.order_items.length > 0 ? (
+                    order.order_items.map((item, index) => (
+                        <div key={index}>
+                            {item.product_name} x{item.quantity} (KES {item.price_at_purchase.toLocaleString()})
+                        </div>
+                    ))
+                ) : (
+                    <div>No items found for this order.</div>
+                )}
               </div>
             </li>
           ))}

@@ -21,20 +21,14 @@ function Footer() {
 
         <div className="footer-contact">
           <h4>Contact Us</h4>
-          <p>📍 Nairobi, Kenya</p>
-          <p>📞 +254 712 345 678</p>
-          <p>✉ support@cartzone.co.ke</p>
+          <p> Nairobi, Kenya</p>
+          <p> +254 712 345 678</p>
+          <p> support@cartzone.co.ke</p>
         </div>
       </div>
 
       <div className="footer-bottom">
         <p>&copy; {new Date().getFullYear()} CartZone. All rights reserved.</p>
-        <div className="footer-socials">
-          <span>🌐</span>
-          <span>📘</span>
-          <span>🐦</span>
-          <span>📸</span>
-        </div>
       </div>
     </footer>
   );
